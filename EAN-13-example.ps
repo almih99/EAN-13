@@ -1,0 +1,375 @@
+%!PS-Adobe-2.0
+
+
+% EAN-13 barcode PostScript module v1.1
+%
+% Copyright (c) 2009 Mihailenko Aleksej
+%
+% This library is free software; you can redistribute it and/or
+% modify it under the terms of the GNU Lesser General Public
+% License as published by the Free Software Foundation; either
+% version 2.1 of the License, or (at your option) any later version.
+%
+% This library is distributed in the hope that it will be useful,
+% but WITHOUT ANY WARRANTY; without even the implied warranty of
+% MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+% Lesser General Public License for more details.
+%
+% You should have received a copy of the GNU Lesser General Public
+% License along with this library; if not, write to the Free Software
+% Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
+%
+% mailto:almih99@mail.ru
+
+%<----------%<----------%<----------%<----------%<----------%<----------%<-----
+% start of barcode module
+% -----------------------------------------------------------------------------
+
+/BARCODE 24 dict def         % dictoniary for private variables and procs
+
+BARCODE begin
+
+  % encoding table
+  /ean13  [ {S   L L L L L L   M   R R R R R R   F}
+            {S   L L G L G G   M   R R R R R R   F}
+            {S   L L G G L G   M   R R R R R R   F}
+            {S   L L G G G L   M   R R R R R R   F}
+            {S   L G L L G G   M   R R R R R R   F}
+            {S   L G G L L G   M   R R R R R R   F}
+            {S   L G G G L L   M   R R R R R R   F}
+            {S   L G L G L G   M   R R R R R R   F}
+            {S   L G L G G L   M   R R R R R R   F}
+            {S   L G G L G L   M   R R R R R R   F}
+          ] def
+
+  % R-type line-width table
+  /ean-R  [ [ 3 2 1 1 ] % 1110010
+            [ 2 2 2 1 ] % 1100110
+            [ 2 1 2 2 ] % 1101100
+            [ 1 4 1 1 ] % 1000010
+            [ 1 1 3 2 ] % 1011100
+            [ 1 2 3 1 ] % 1001110
+            [ 1 1 1 4 ] % 1010000
+            [ 1 3 1 2 ] % 1000100
+            [ 1 2 1 3 ] % 1001000
+            [ 3 1 1 2 ] % 1110100
+          ] def
+
+  /scalefactor 0.935 def   % 1 unit == 0.33 mm if CTM was unchenged
+  /showgrid false def      % if true -- show gray grid for debugging
+
+  /strbuffer (*) def       % buffer for temporary 1 character width string
+  /strX (X) def            % string with 'X' value for width adjusting
+
+  % this variables can be changed fo adjusting height and font in barcode
+  /height 50 scalefactor div def % default height of barcode in units of 0.33 mm
+
+  gsave
+    /font /Helvetica findfont
+    dup setfont strX stringwidth 
+    pop 7 exch div 
+    dup /indent exch def 
+    scalefont def
+  grestore 
+
+  % helper for setting context - executed for each barcode
+  /initialize { % mark n1 ... n13 -> mark n1 ... n13
+    currentpoint translate
+    newpath
+    0 0 moveto
+    scalefactor dup scale
+    font setfont
+    /firstdigitwidth 13 index % first digit
+              strbuffer cvs stringwidth pop
+              scalefactor mul % outer units
+              def
+  } bind def
+
+  % helper for checksum proc
+  /oddsumm { % mark x1 x2 ... xn  -> mark x1 x2 ... xn xn-1+xn-2+...
+    0
+    2 2 counttomark 3 sub {
+      index add
+    } for
+  } bind def
+
+  % draw lines with 0.33 mm step for debugging
+  /drawgrid {
+    gsave
+    firstdigitwidth scalefactor div 0 translate
+    newpath
+    0 1 95 {
+      -3 moveto 0 height 6 add rlineto
+    }for
+    0.05 setlinewidth
+    0.5 setgray
+    stroke
+    grestore
+  } def
+
+  /drawbar { % width boolColor -> ---   
+    {
+      0 indent moveto
+      dup 0 rlineto 
+      0 height indent sub  rlineto 
+      dup neg 0 rlineto closepath
+    } if
+    0 translate
+  } bind def
+
+  /drawgroup { % w1 w2 w3 w4 boolColor N -> ---
+    -1 1 {
+      1 add -1 roll 1 index drawbar
+      not
+    } for
+    pop
+  } bind def
+
+  /drawdigit { % int -> ---
+    strbuffer cvs dup
+    stringwidth pop 2 div 3.5 add neg 0 moveto
+    show
+  } bind def
+
+  % current digin always at 12th position
+  % ahtung!!! 'array current get' cause error!!! use 'current array exch get' !!!
+  /current { % --- -> num
+    12 index 10 mod
+  } bind def
+
+  /reverse { % a b c d N -> d c b a
+    1 exch 1 exch {
+      -1 roll
+    } for
+  } bind def
+
+% procs S M L G R F leaves on the stack elements to make next digit current
+
+  /S { % --- -> x
+    current strbuffer cvs show currentpoint translate
+    indent /indent 0 def
+    1 1 1 true 3 drawgroup
+    /indent exch def
+    0
+  } bind def
+
+  /M { % --- -> ---
+    indent /indent 0 def
+    1 1 1 1 1 false 5 drawgroup
+    /indent exch def
+  } bind def
+
+  /L { % num -> x
+    current ean-R exch get aload pop false 4 drawgroup
+    current drawdigit
+    0
+  } bind def
+
+  /G { % num -> x
+    current ean-R exch get aload pop 4 reverse false 4 drawgroup
+    current drawdigit
+    0
+  } bind def
+
+  /R { % num -> x
+    current ean-R exch get aload pop true 4 drawgroup
+    current drawdigit
+    0
+  } bind def
+
+  /F { % --- -> ---
+    indent /indent 0 def
+    1 1 1 true 3 drawgroup
+    /indent exch def
+  } bind def
+
+end
+
+% =============================================================================
+% public procs
+% =============================================================================
+
+
+% split srting (12345) to set of digits (0-9) on the stack
+% only reason -- I'm hate type digit-space-digit-space...
+/strexpand { % string -> num num num ... num
+  48 exch % 0 code
+  { 1 index sub exch } forall
+  pop
+} bind def
+
+% used for mark stack position. '[' can be used instead.
+/barcode { % --- -> mark
+  mark
+} def
+
+% process numbers till mark and leave control summ on the top of stack
+/EAN13checksum { % mark n1 n2 n3 n4 n5 n6 n7 n8 n9 n10 n11 n12  -->  mark n1 n2 n3 n4 n5 n6 n7 n8 n9 n10 n11 n12 N13
+  BARCODE begin
+    oddsumm oddsumm 
+    3 mul add 10 mod 10 exch sub 10 mod
+  end
+} bind def
+
+% returns current height of bar
+/currenEANheight { % --- --> height
+  BARCODE begin
+    height scalefactor mul
+  end
+} def
+
+% sets current height of bar
+/setEANheight { % height --> ---
+  BARCODE begin
+    /height exch scalefactor div def
+  end
+} def
+
+% returns size of boundin box for barcode
+/EAN13bbox { % mark n1 n2 ... n13 --> mark n1 n2 ... n13 wx wy
+  BARCODE begin
+    gsave
+      counttomark 13 ne {(13 digits required) print flush stop} if
+      initialize
+      firstdigitwidth 95 scalefactor mul add
+      height scalefactor mul
+    grestore
+  end
+} bind def
+
+
+% Show barcode EAN-13 in current point with current scale and color
+% It accept 13 digits on the stack with mark before them
+/EAN13 { % mark n1 n2 n3 n4 n5 n6 n7 n8 n9 n10 n11 n12 n13 --> ---
+  BARCODE begin
+    gsave
+      counttomark 13 ne {(13 digits required) print flush stop} if
+      initialize
+      showgrid {drawgrid} if
+      current ean13 exch get exec 
+      fill
+      cleartomark
+    grestore
+  end
+} bind def
+
+% -----------------------------------------------------------------------------
+% end of barcode module
+%<----------%<----------%<----------%<----------%<----------%<----------%<-----
+
+
+
+%  #####     ########  ###     ###   ######      ##############################
+%  ##   ##   ##        ## #   # ##  ##    ##     ##############################
+%  ##    ##  ########  ##  # #  ##  ##    ##     ##############################
+%  ##   ##   ##        ##   #   ##  ##    ##     ##############################
+%  #####     ########  ##       ##   ######      ##############################
+
+
+
+/Helvetica findfont 12 scalefont setfont
+/label { gsave 0 -25 rmoveto show grestore } def  % helper to show labels
+
+
+
+% #1
+% simplest example
+% set where draw barcode
+50 700 moveto
+(#1 Simple barcode) label
+% set barcode data (13 digits) and show it
+barcode 9 7 8 5 8 4 5 9 1 0 8 5 1 EAN13
+
+
+
+% #2
+% now what to do when barcode is in string form and with 12 digits.
+% Checksumm (digit #13) calculatet by EAN13checksum proc
+180 700 moveto
+(#2 Simple barcode) label
+barcode (695810040001) strexpand EAN13checksum EAN13
+
+
+
+% #3
+% Barcode in color
+310 700 moveto
+(#3 Colored barcode) label
+gsave
+  0.5 0 0 setrgbcolor
+  barcode (460678200677) strexpand EAN13checksum EAN13
+grestore
+
+
+
+% #4
+% and in negative (demo for EAN13bbox)
+430 700 moveto
+(#4 Negated barcode) label
+gsave
+  barcode (489119900002) strexpand EAN13checksum
+  EAN13bbox % proc do not erase data on stack!!! Puts width and height of barcode on stack
+newpath
+  440 700 moveto 
+  -10 -10 rmoveto 20 add dup 0 exch rlineto exch 20 add 0 rlineto 0 exch neg rlineto closepath
+  0 setgray
+  fill
+grestore
+gsave
+  440 700 moveto
+  1 setgray
+  EAN13
+grestore
+
+
+
+% #5
+% Big barcode with grid and with height 30 units
+gsave
+  50 470 moveto
+(#5 Scaled barcode with grid (for debugging) and specifed height) label
+  5 5 scale
+  BARCODE /showgrid true put                    % show grid
+  currenEANheight 30 setEANheight      % set height
+  barcode (7018727003504) strexpand EAN13
+  BARCODE /showgrid false put                   % don't show grid
+  setEANheight                              % restore original value of height
+grestore
+
+
+
+% #6
+% And just for fun
+
+/showbox { % width height --> ---
+  gsave
+    currentpoint translate
+    0 0 moveto dup 0 exch rlineto exch 0 rlineto 0 exch neg rlineto closepath
+    fill
+  grestore
+} def
+
+gsave
+  50 100 moveto
+  (#6 Just for fun. Some random barcodes) label
+  300 250 translate
+  newpath
+  0 0 170 0 360 arc 1 1 0.8 setrgbcolor fill
+  0 0 120 0 360 arc 1 0.5 0.5 setrgbcolor fill
+  0 0 50 0 360 arc 1 1 1 setrgbcolor fill
+  0 0 30 0 360 arc 1 1 0 setrgbcolor fill
+  0 45 359 {
+    gsave
+      rotate
+      70 -25 moveto
+      barcode 1 1 12 {pop rand 10 mod} for     % puts mark and 12 random digits on stack
+      EAN13checksum                            % puts checksum on stack
+      EAN13bbox 1 setgray showbox 0 setgray    % draw white square
+      EAN13                                    % draw barcode
+    grestore
+  } for 
+grestore
+
+
+
+showpage
